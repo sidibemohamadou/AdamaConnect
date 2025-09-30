@@ -16,36 +16,37 @@ DB_PASSWORD="adama_secure_password_2025"
 PORT=5001
 
 # Vérifier les privilèges root
-if [ "$EUID" -ne 0 ]; then 
-    echo "⚠️  Ce script doit être exécuté en tant que root (sudo)"
-    exit 1
+if [ "$EUID" -ne 0 ]; then 
+    echo "⚠️  Ce script doit être exécuté en tant que root (sudo)"
+    exit 1
 fi
 
 echo "🔄 Mise à jour du système..."
 dnf update -y
 
 echo "📦 Installation des dépendances système..."
+# 'git' est essentiel ici pour le clonage automatique
 dnf install -y curl git nginx postgresql postgresql-server postgresql-contrib
 
 # Installer Node.js 18+
 if ! command -v node &> /dev/null; then
-    echo "📦 Installation de Node.js..."
-    dnf module install -y nodejs:18/common
+    echo "📦 Installation de Node.js..."
+    dnf module install -y nodejs:18/common
 fi
 
 echo "✅ Node.js $(node -v) installé"
 
 # Installer PM2
 if ! command -v pm2 &> /dev/null; then
-    echo "📦 Installation de PM2..."
-    npm install -g pm2
+    echo "📦 Installation de PM2..."
+    npm install -g pm2
 fi
 
 echo "🗄️ Configuration de PostgreSQL..."
 # Initialiser PostgreSQL si nécessaire
 if [ ! -f /var/lib/pgsql/data/postgresql.conf ]; then
-    echo "🔧 Initialisation de PostgreSQL..."
-    postgresql-setup --initdb
+    echo "🔧 Initialisation de PostgreSQL..."
+    postgresql-setup --initdb
 fi
 
 # Démarrer et activer PostgreSQL
@@ -60,14 +61,21 @@ echo "📁 Création du répertoire d'application..."
 mkdir -p $APP_DIR
 chown -R $SERVICE_USER:$SERVICE_USER $APP_DIR
 
-echo "📂 Clone du projet depuis GitHub..."
-cd /tmp
-rm -rf ADAMAConnect
-git clone https://github.com/sidibemohamadou/AdamaConnect.git
-cp -r ADAMAConnect/* $APP_DIR/
-chown -R $SERVICE_USER:$SERVICE_USER $APP_DIR
-
+echo "📂 Gestion du code depuis GitHub..."
 cd $APP_DIR
+
+# Vérifier si le dépôt Git est déjà initialisé dans le répertoire de l'application
+if [ -d ".git" ]; then
+    echo "🔄 Le dépôt existe. Mise à jour des dernières modifications (git pull)..."
+    # Exécuter git pull en tant qu'utilisateur service (nginx)
+    sudo -u $SERVICE_USER git pull
+else
+    echo "⬇️ Dépôt non trouvé. Clonage initial du projet..."
+    # Cloner directement dans le répertoire cible
+    git clone https://github.com/sidibemohamadou/AdamaConnect.git .
+    # S'assurer que les permissions sont correctes après le clone
+    chown -R $SERVICE_USER:$SERVICE_USER $APP_DIR
+fi
 
 echo "📦 Installation des dépendances de l'application..."
 sudo -u $SERVICE_USER npm install
@@ -94,20 +102,20 @@ chown $SERVICE_USER:$SERVICE_USER .env
 echo "🔧 Configuration de Nginx..."
 cat > $NGINX_CONF_DIR/$APP_NAME.conf << EOF
 server {
-    listen 80;
-    server_name _;
+    listen 80;
+    server_name _;
 
-    location /$APP_NAME/ {
-        proxy_pass http://localhost:$PORT/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_cache_bypass \$http_upgrade;
-    }
+    location /$APP_NAME/ {
+        proxy_pass http://localhost:$PORT/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
+    }
 }
 EOF
 
@@ -120,18 +128,18 @@ nginx -t && systemctl enable --now nginx
 echo "🚀 Configuration PM2..."
 cat > ecosystem.config.js << EOF
 module.exports = {
-  apps: [{
-    name: '$APP_NAME',
-    script: 'server/index.js',
-    env: {
-      NODE_ENV: 'production',
-      PORT: $PORT
-    },
-    instances: 1,
-    autorestart: true,
-    watch: false,
-    max_memory_restart: '1G'
-  }]
+  apps: [{
+    name: '$APP_NAME',
+    script: 'server/index.js',
+    env: {
+      NODE_ENV: 'production',
+      PORT: $PORT
+    },
+    instances: 1,
+    autorestart: true,
+    watch: false,
+    max_memory_restart: '1G'
+  }]
 }
 EOF
 
@@ -145,14 +153,14 @@ sudo -u $SERVICE_USER pm2 save
 
 # Pare-feu
 if command -v firewall-cmd &> /dev/null; then
-    firewall-cmd --permanent --add-service=http
-    firewall-cmd --permanent --add-service=https
-    firewall-cmd --reload
+    firewall-cmd --permanent --add-service=http
+    firewall-cmd --permanent --add-service=https
+    firewall-cmd --reload
 fi
 
 # SELinux
 if command -v setsebool &> /dev/null; then
-    setsebool -P httpd_can_network_connect 1
+    setsebool -P httpd_can_network_connect 1
 fi
 
 echo ""
@@ -160,7 +168,7 @@ echo "🎉 DÉPLOIEMENT TERMINÉ AVEC SUCCÈS!"
 echo "🌐 Application accessible : http://$(hostname -I | awk '{print $1}')/$APP_NAME/"
 echo "🗄️ Base de données PostgreSQL configurée : $DB_NAME"
 echo "📊 Vérifications utiles :"
-echo "   - Statut de l'app: sudo -u nginx pm2 status"
-echo "   - Logs de l'app: sudo -u nginx pm2 logs"
-echo "   - Statut PostgreSQL: systemctl status postgresql"
-echo "   - Statut Nginx: systemctl status nginx"
+echo "   - Statut de l'app: sudo -u nginx pm2 status"
+echo "   - Logs de l'app: sudo -u nginx pm2 logs"
+echo "   - Statut PostgreSQL: systemctl status postgresql"
+echo "   - Statut Nginx: systemctl status nginx"
