@@ -1,7 +1,7 @@
 #!/bin/bash
 
-echo "🚀 Déploiement Serveur avec PostgreSQL - ADAMAConnect"
-echo "===================================================="
+echo "🚀 Déploiement Serveur avec PostgreSQL - ADAMAConnect (Sans Clonage Git)"
+echo "======================================================================"
 echo "📋 Système détecté: CentOS 10 Stream"
 echo ""
 
@@ -25,8 +25,8 @@ echo "🔄 Mise à jour du système..."
 dnf update -y
 
 echo "📦 Installation des dépendances système..."
-# 'git' est essentiel ici pour le clonage automatique
-dnf install -y curl git nginx postgresql postgresql-server postgresql-contrib
+# 'git' n'est plus requis ici
+dnf install -y curl nginx postgresql postgresql-server postgresql-contrib
 
 # Installer Node.js 18+
 if ! command -v node &> /dev/null; then
@@ -61,23 +61,11 @@ echo "📁 Création du répertoire d'application..."
 mkdir -p $APP_DIR
 chown -R $SERVICE_USER:$SERVICE_USER $APP_DIR
 
-echo "📂 Gestion du code depuis GitHub..."
+echo "⚠️ ATTENTION : Le code source DOIT être manuellement placé dans $APP_DIR"
 cd $APP_DIR
 
-# Vérifier si le dépôt Git est déjà initialisé dans le répertoire de l'application
-if [ -d ".git" ]; then
-    echo "🔄 Le dépôt existe. Mise à jour des dernières modifications (git pull)..."
-    # Exécuter git pull en tant qu'utilisateur service (nginx)
-    sudo -u $SERVICE_USER git pull
-else
-    echo "⬇️ Dépôt non trouvé. Clonage initial du projet..."
-    # Cloner directement dans le répertoire cible
-    git clone https://github.com/sidibemohamadou/AdamaConnect.git .
-    # S'assurer que les permissions sont correctes après le clone
-    chown -R $SERVICE_USER:$SERVICE_USER $APP_DIR
-fi
-
 echo "📦 Installation des dépendances de l'application..."
+# Cette étape nécessite que le fichier package.json soit dans $APP_DIR
 sudo -u $SERVICE_USER npm install
 
 echo "🏗️ Build de l'application..."
