@@ -63,7 +63,7 @@ chown -R $SERVICE_USER:$SERVICE_USER $APP_DIR
 echo "📂 Clone du projet depuis GitHub..."
 cd /tmp
 rm -rf ADAMAConnect
-git clone https://github.com/mohamadousidibe-spec/ADAMAConnect.git
+git clone https://github.com/sidibemohamadou/AdamaConnect.git
 cp -r ADAMAConnect/* $APP_DIR/
 chown -R $SERVICE_USER:$SERVICE_USER $APP_DIR
 
